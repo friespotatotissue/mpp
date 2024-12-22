@@ -6,26 +6,27 @@
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
         <title>Multiplayer Piano</title>
         <meta name="description" content="An online piano you can play alone or with others in real-time. MIDI support, 88 keys, velocity sensitive. You can show off your skill or chat while listening to others play.">
-        <link rel="stylesheet" href="piano/screen.css">
-        <link rel="shortcut icon" type="image/png" href="piano/favicon.png">
+        <link rel="stylesheet" href="/piano/screen.css">
+        <link rel="shortcut icon" type="image/png" href="/piano/favicon.png">
         
-        <!-- Add Socket.IO client before other scripts -->
-        <script src="/socket.io/socket.io.js"></script>
+        <!-- Client scripts -->
+        <script src="/piano/jquery.min.js"></script>
+        <script src="/piano/util.js"></script>
+        <script src="/piano/Client.js"></script>
+        <script src="/piano/Color.js"></script>
+        <script src="/piano/script.js"></script>
         
-        <!-- Update audio preload script -->
+        <!-- Audio initialization -->
         <script>
-            // Audio context
             window.AudioContext = window.AudioContext || window.webkitAudioContext;
             let audioContext;
             let audioBuffers = {};
             
-            // Initialize audio
             async function initAudio() {
                 try {
                     audioContext = new AudioContext();
                     console.log('AudioContext created:', audioContext.state);
                     
-                    // Load piano sounds - using the format <key>.wav.mp3
                     const keys = [
                         'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7',
                         'b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7',
@@ -41,261 +42,27 @@
                     for (let key of keys) {
                         try {
                             console.log(`Loading ${key}.wav.mp3...`);
-                            const response = await fetch(`piano/audio/${key}.wav.mp3`);
+                            const response = await fetch(`/piano/audio/default/${key}.wav.mp3`);
                             
                             if (!response.ok) {
                                 throw new Error(`HTTP error! status: ${response.status}`);
                             }
                             
                             const arrayBuffer = await response.arrayBuffer();
-                            audioBuffers[key] = await audioContext.decodeAudioData(arrayBuffer);
-                            console.log(`Successfully loaded ${key}`);
+                            audioContext.decodeAudioData(arrayBuffer).then(buffer => {
+                                audioBuffers[key] = buffer;
+                            });
                         } catch (error) {
-                            console.error(`Failed to load sound ${key}:`, error);
+                            console.error(`Error loading ${key}.wav.mp3:`, error);
                         }
                     }
-                    
-                    console.log('Audio loading complete. Loaded buffers:', Object.keys(audioBuffers));
-                    
-                    // Signal that audio is ready
-                    document.dispatchEvent(new Event('audioLoaded'));
                 } catch (error) {
-                    console.error('Audio initialization failed:', error);
+                    console.error('Error initializing audio:', error);
                 }
-            }
-
-            // Play note function
-            function playNote(note, velocity = 0.5) {
-                if (!audioContext) {
-                    console.warn('AudioContext not initialized');
-                    return;
-                }
-                
-                // Convert note name to match our file naming
-                const noteKey = note.toLowerCase();
-                console.log(`Attempting to play note: ${noteKey}`);
-                
-                const buffer = audioBuffers[noteKey];
-                
-                if (!buffer) {
-                    console.warn(`No audio buffer found for note: ${noteKey}`);
-                    return;
-                }
-                
-                try {
-                    const source = audioContext.createBufferSource();
-                    const gainNode = audioContext.createGain();
-                    
-                    source.buffer = buffer;
-                    source.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
-                    
-                    gainNode.gain.value = velocity;
-                    source.start(0);
-                    console.log(`Playing note: ${noteKey} with velocity: ${velocity}`);
-                } catch (error) {
-                    console.error(`Error playing note ${noteKey}:`, error);
-                }
-            }
-
-            // Initialize audio on page load and handle user interaction
-            document.addEventListener('DOMContentLoaded', () => {
-                console.log('DOM Content Loaded - initializing audio...');
-                initAudio().catch(console.error);
-                
-                // Handle user interaction to start audio context
-                function startAudioContext() {
-                    if (audioContext && audioContext.state === 'suspended') {
-                        audioContext.resume().then(() => {
-                            console.log('AudioContext resumed successfully');
-                        }).catch(error => {
-                            console.error('Failed to resume AudioContext:', error);
-                        });
-                    }
-                }
-                
-                // Add multiple event listeners for first interaction
-                ['click', 'touchstart', 'keydown'].forEach(eventType => {
-                    document.body.addEventListener(eventType, startAudioContext, { once: true });
-                });
-            });
-        </script>
-
-        <!-- Add connection script -->
-        <script>
-            // Initialize socket connection with the correct path
-            const socket = io('http://localhost:8080', {
-                path: '/piano/socket.io',
-                transports: ['websocket', 'polling'],
-                reconnectionAttempts: 5,
-                reconnectionDelay: 1000
-            });
-            
-            // Handle connection events
-            socket.on('connect', () => {
-                console.log('Connected to server');
-                // Join default room
-                socket.emit('join', {
-                    name: 'Player',
-                    room: 'lobby'
-                });
-            });
-
-            socket.on('disconnect', () => {
-                console.log('Disconnected from server');
-            });
-
-            // Handle incoming notes from other players
-            socket.on('note', (data) => {
-                if (typeof playNote === 'function') {
-                    playNote(data.note, data.velocity);
-                }
-            });
-
-            // Handle chat messages
-            socket.on('chat', (data) => {
-                console.log('Chat message:', data);
-            });
-
-            // Handle user joined/left events
-            socket.on('user-joined', (data) => {
-                console.log('User joined:', data);
-            });
-
-            socket.on('user-left', (data) => {
-                console.log('User left:', data);
-            });
-        </script>
-
-        <script>
-            // Prevent page reload on URL change
-            window.addEventListener('popstate', function(event) {
-                event.preventDefault();
-                return false;
-            });
-
-            // Prevent form submissions
-            window.addEventListener('submit', function(event) {
-                event.preventDefault();
-                return false;
-            });
-
-            // Handle navigation programmatically
-            function navigateTo(path) {
-                history.pushState(null, '', path);
-                return false;
             }
         </script>
     </head>
     <body>
-        <!-- Social section -->
-        <div id="social">
-            <div id="like-button">
-                <div class="fb-like" data-href="https://www.facebook.com/MultiplayerPiano/" data-layout="button_count" data-action="like" data-size="small" data-show-faces="false" data-share="true"></div>
-            </div>
-            <div id="inclinations"></div>
-        </div>
-
-        <!-- Chat section -->
-        <div id="chat">
-            <ul></ul>
-            <input placeholder="You can chat with this thing." class="translate" maxlength="512">
-        </div>
-
-        <!-- Main piano elements -->
-        <div id="names"></div>
         <div id="piano"></div>
-        <div id="cursors"></div>
-
-        <!-- Bottom controls -->
-        <div id="bottom">
-            <div class="relative">
-                <div id="room">
-                    <div class="info"></div>
-                    <div class="expand"></div>
-                    <div class="more">
-                        <div class="new translate">New Room...</div>
-                    </div>
-                </div>
-                <div id="new-room-btn" class="ugly-button translate">New Room...</div>
-                <div id="play-alone-btn" class="ugly-button">Play Alone</div>
-                <div id="room-settings-btn" class="ugly-button">Room Settings</div>
-                <div id="midi-btn" class="ugly-button translate">MIDI In/Out</div>
-                <div id="record-btn" class="ugly-button translate">Record MP3</div>
-                <div id="synth-btn" class="ugly-button translate">Synth</div>
-                <div id="status"></div>
-                <div id="volume"></div>
-                <div id="volume-label">volume</div>
-                <div id="quota">
-                    <div class="value"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal dialogs -->
-        <div id="modal">
-            <div class="bg"></div>
-            <div id="modals">
-                <div id="new-room" class="dialog">
-                    <p>
-                        <input type="text" name="name" placeholder="room name" class="text translate" maxlength="512">
-                    </p>
-                    <p>
-                        <label>
-                            <input type="checkbox" name="visible" class="checkbox translate" checked>
-                            Visible (open to everyone)
-                        </label>
-                    </p>
-                    <button class="submit">go</button>
-                </div>
-
-                <div id="room-settings" class="dialog">
-                    <p>
-                        <div class="ugly-button drop-crown">Drop crown</div>
-                    </p>
-                    <p>
-                        <label>
-                            <input type="checkbox" name="visible" class="checkbox translate" checked>
-                            Visible (open to everyone)
-                        </label>
-                    </p>
-                    <p>
-                        <label>
-                            <input type="checkbox" name="chat" class="checkbox translate" checked>
-                            Enable Chat
-                        </label>
-                    </p>
-                    <p>
-                        <label>
-                            <input type="checkbox" name="crownsolo" class="checkbox">
-                            Only Owner can Play
-                        </label>
-                    </p>
-                    <button class="submit">APPLY</button>
-                    <p>
-                        <label>
-                            Background color: &nbsp;
-                            <input type="color" name="color" placeholder="" maxlength="7" class="color">
-                        </label>
-                    </p>
-                </div>
-
-                <div id="rename" class="dialog">
-                    <p>
-                        <input type="text" name="name" placeholder="My Fancy New Name" maxlength="40" class="text">
-                    </p>
-                    <button class="submit">USER SET</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Scripts -->
-        <script src="piano/jquery.min.js"></script>
-        <script src="piano/util.js"></script>
-        <script src="piano/Client.js"></script>
-        <script src="piano/NoteQuota.js"></script>
-        <script src="piano/lame.min.js"></script>
-        <script src="piano/Color.js"></script>
-        <script src="piano/script.js"></script>
     </body>
 </html>

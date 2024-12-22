@@ -11,17 +11,21 @@ class Server {
         this.app = express();
         this.server = http.createServer(this.app);
         
-        // Serve static files
-        this.app.use(express.static('./'));
-        this.app.use('/piano', express.static('./'));
+        // Serve static files - update paths
+        this.app.use(express.static(__dirname + '/../'));
+        this.app.use('/piano', express.static(__dirname + '/../'));
 
         // Handle all piano routes
+        this.app.get('/', (req, res) => {
+            res.redirect('/piano/lobby');
+        });
+
         this.app.get('/piano', (req, res) => {
             res.redirect('/piano/lobby');
         });
 
         this.app.get('/piano/lobby', (req, res) => {
-            res.sendFile('index.html', { root: './' });
+            res.sendFile('index.html', { root: __dirname + '/../' });
         });
 
         this.app.get('/piano/*', (req, res) => {
